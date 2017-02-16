@@ -7,14 +7,13 @@
  *  ui.route的config
  *  run
  */
-"use strict";
 angular.module('gulp-ng-learn', [
     'ui.router',
     'gulp.task',
     'gulp.main',
     'gulp.templates'
 ])
-    .config(function ($stateProvider, $urlRouterProvider, $sceDelegateProvider, AppConstant) {
+    .config(function ($urlRouterProvider) {
 
         $urlRouterProvider.otherwise(function () {
             return '/main/task';

@@ -8,25 +8,52 @@ var gulp = require('gulp'),
     del = require('del'),
     config = require('./gulpconfigs');
 
-var jsSrc = 'app/scripts/**/*.js',
-    cssSrc = ['app/styles/**/*.css','app/styles/**/*.scss'],
-    templatesSrc=['app/views/**/*.html']
+var browserSync = require('browser-sync');
+var reload = browserSync.reload;
+var webserver = require('gulp-webserver');
+var paths = {
+    js: ['./app/scripts/**/*.js'],
+    css: ['./app/styles/**/*.css','./app/styles/**/*.scss'],
+    templates: ['./app/views/**/*.html'],
+    buildjs: ['./dist/js/**/*.js'],
+    buildcss: ['./dist/css/**/*.css']
+};
 
-gulp.task('default', function() {
-    // 将你的默认的任务代码放在这
 
+function bowerFiles() {
+    return [
+        './bower_components/jquery/dist/jquery.js',
+        // './bower_components/bootstrap/dist/js/bootstrap.js',
+        './bower_components/angular/angular.js',
+        './bower_components/angular-ui-router/release/angular-ui-router.js'
+    ]
+}
+function bowerCss(){
+    return [
+        './bower_components/bootstrap/dist/css/bootstrap.min.css',
+    ]
+}
+
+var names = {
+    app   : 'app.all',
+    appMin: 'app.all.min'
+};
+
+gulp.task('clean', function() {
+    // You can use multiple globbing patterns as you would with `gulp.src`
+    return del(['./dist']);
 });
 
 //语法检查
 gulp.task('jshint', function () {
-    return gulp.src(jsSrc)
+    return gulp.src(paths.js)
         .pipe(plugin.jshint())
         .pipe(plugin.jshint.reporter('jshint-stylish'));
 });
 
 //压缩,合并 js
 gulp.task('js', function() {
-    return gulp.src(jsSrc)      //需要操作的文件
+    return gulp.src(paths.js)      //需要操作的文件
         .pipe(plugin.plumber())
     /*jshint camelcase:false*/
         .pipe(plugin.ngAnnotate({add: true, single_quotes: true}))
@@ -38,42 +65,167 @@ gulp.task('js', function() {
             header: '(function(){\'use strict\';\n',
             footer: '\n}());'
         }))
-        .pipe(gulp.dest('dist/js'))       //输出到文件夹
+        .pipe(gulp.dest('./dist/js'))       //输出到文件夹
         .pipe(plugin.rename({suffix: '.min'}))   //rename压缩后的文件名
         .pipe(plugin.uglify())    //压缩
-        .pipe(gulp.dest('dist/js'));  //输出
+        .pipe(gulp.dest('./dist/js'));  //输出
+});
+
+gulp.task('vendorJs', function() {
+    return gulp.src(bowerFiles())
+        .pipe(plugin.concat('vendor.js'))
+        .pipe(gulp.dest('./dist/js'))       //输出到文件夹
+        .pipe(plugin.rename({suffix: '.min'}))   //rename压缩后的文件名
+        .pipe(gulp.dest('./dist/js'))
 });
 
 //压缩css
-gulp.task('css', function() {
-    return gulp.src('css/*.css')    //需要操作的文件
-        .pipe(rename({suffix: '.min'}))   //rename压缩后的文件名
-        .pipe(minifycss())   //执行压缩
-        .pipe(gulp.dest('Css'));   //输出文件夹
+gulp.task('css', function () {
+    return gulp.src(paths.css)    //需要操作的文件
+        .pipe(plugin.plumber(
+            {
+                errorHandler: function (error) {
+                    plugin.util.log(
+                        error.toString()
+                    );
+                    stream.end();
+                }
+            }))
+        .pipe(plugin.concat('main.scss'))
+        .pipe(plugin.sass())
+        .pipe(plugin.autoprefixer())
+        .pipe(plugin.concat('main.css'))
+        .pipe(plugin.minifyCss())   //执行压缩
+        .pipe(plugin.rename({suffix: '.min'}))   //rename压缩后的文件名
+        .pipe(gulp.dest('./dist/css'));   //输出文件夹
 });
 
+gulp.task('vendorCss', function() {
+    return gulp.src(bowerCss())
+        .pipe(plugin.concat('vendor.css'))
+        .pipe(gulp.dest('./dist/css'))   //输出文件夹
+        .pipe(plugin.minifyCss())   //执行压缩
+        .pipe(plugin.rename({suffix: '.min'}))  //rename压缩后的文件名
+        .pipe(gulp.dest('./dist/css'));   //输出文件夹
+});
+
+//打包html
 gulp.task('html', function () {
     del.sync('dist/js/templates.js');
-    var path = templatesSrc;
+    var path = paths.templates;
     return gulp.src(path)
-        .pipe(ngTemplateCache('gulp_ng_tpl.js', {
+        .pipe(ngTemplateCache('templates.js',{
             base      : function (f) {
-                return f.path.replace(f.cwd + '\\', '');
+                console.log('path=='+f.path);
+                console.log('cwd=='+f.cwd);
+                return f.path.replace(f.cwd+'\/app' + '\/', '');
             },
             module    : 'gulp.templates',
             standalone: true
         }))
         .pipe(plugin.uglify())
-        //.pipe(plugin.rev())
         .pipe(gulp.dest('dist/js'));
 });
 
+gulp.task('htmlIndex', function () {
+    return gulp.src('./app/index.html')
+        .pipe(gulp.dest('./dist/'));
+});
+
+gulp.task('inject', ['css','vendorCss','js','vendorJs'], function () {
+    // It's not necessary to read the files (will speed up things), we're only after their paths:
+    return gulp.src('./app/index.html')
+        .pipe(plugin.inject(gulp.src('./dist/css/main.min.css', {read: false}), {relative: true}))
+        .pipe(plugin.inject(gulp.src('./dist/css/vendor.min.css', {read: false}), {name: 'bower',relative: true}))
+        .pipe(plugin.inject(gulp.src('./dist/js/main.js', {read: false}), {relative: true}))
+        .pipe(plugin.inject(gulp.src('./dist/js/vendor.js', {read: false}), {name: 'bower', relative: true}))
+        .pipe(plugin.inject(gulp.src('./dist/js/templates.js', {read: false}), {name: 'templates', relative: true}))
+
+        .pipe(gulp.dest('./dist/'));
+});
+
+gulp.task('jsIndex', ['js','vendorJs'], function () {
+    gulp.src('./dist/index.html')
+        // .pipe(plugin.inject(gulp.src(paths.js, {read: false}), {relative: true}))
+        .pipe(plugin.inject(gulp.src('./dist/js/main.js', {read: false}), {relative: true}))
+        .pipe(plugin.inject(gulp.src('./dist/js/vendor.js', {read: false}), {name: 'bower', relative: true}))
+        .pipe(gulp.dest('./dist/'));
+});
+
+gulp.task('cssIndex', ['css','vendorCss'], function () {
+    gulp.src('./dist/index.html')
+        .pipe(plugin.inject(gulp.src('./dist/css/main.min.css', {read: false}), {relative: true}))
+        .pipe(plugin.inject(gulp.src('./dist/css/vendor.min.css', {read: false}), {name: 'bower',relative: true}))
+        .pipe(gulp.dest('./dist/'));
+});
+
+
+gulp.task('fonts', function () {
+    return gulp.src(require('main-bower-files')().concat(['app/fonts/**/*','bower_components/bootstrap/fonts/**/*']))
+        .pipe(plugin.filter('**/*.{eot,svg,ttf,woff,woff2,otf}'))
+        .pipe(plugin.flatten())
+        .pipe(gulp.dest('.tmp/fonts'))
+        .pipe(gulp.dest('dist/fonts'));
+});
+
+
+gulp.task('watchStyle', function () {
+    gulp.watch(paths.css, ['css']);
+});
+
+gulp.task('watchJs', function () {
+    gulp.watch(paths.js, ['js']);
+});
+
+gulp.task('watchHtml', function () {
+    gulp.watch(paths.templates, ['html']);
+});
+
+gulp.task('watch', ['watchStyle', 'watchJs','watchHtml']);
+//
+// gulp.task('serve', ['build'], function () {
+//     browserSync({
+//         notify: false,
+//         port: 9000,
+//         server: {
+//             baseDir: ['dist'],
+//             routes: {
+//                 '/bower_components': 'bower_components'
+//             }
+//         }
+//     });
+//
+//     // watch for changes
+//     gulp.watch([
+//         'app/index.html',
+//         'app/views/**/*.html',
+//         'app/styles/**/*.css',
+//         'app/styles/**/*.scss',
+//         'app/scripts/**/*.js',
+//         'app/images/**/*'
+//     ]).on('change', reload);
+// });
+//
+// gulp.task('server',['build','watch'], function() {
+//     gulp.src('./')
+//         .pipe(webserver({
+//             port: 8001,
+//             livereload: true,
+//             directoryListing: true,
+//             open: 'dist/index.html'
+//         }));
+// });
+
+
 
 gulp.task('build', function () {
-    runSequence('jshint', 'js', 'css', 'inject');
+    runSequence('clean', 'jshint','html','inject', 'fonts');
 });
 
 //默认命令,在cmd中输入gulp后,执行的就是这个任务(压缩js需要在检查js之后操作)
 gulp.task('default', ['build']);
 
+gulp.task('help', function () {
+    console.log(plugin);
+});
 
