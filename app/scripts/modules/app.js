@@ -21,7 +21,7 @@ angular.module('gulp-ng-learn', [
     })
     //这里面可以放全局rootScope 但是能不用就不用,尽量用service代替
     .run(function ($rootScope) {
-        console.log("=======run======");
+        console.log("=======run=== ===tttt,t");
         $rootScope.global = {};
 
     });

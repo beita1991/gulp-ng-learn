@@ -38,7 +38,11 @@ var names = {
     app   : 'app.all',
     appMin: 'app.all.min'
 };
-
+// gulp.task('default', function () {
+//     gutil.log('message')
+//     gutil.log(gutil.colors.red('error'))
+//     gutil.log(gutil.colors.green('message:') + "some")
+// })
 gulp.task('clean', function() {
     // You can use multiple globbing patterns as you would with `gulp.src`
     return del(['./dist']);
@@ -93,7 +97,7 @@ gulp.task('css', function () {
             }))
         .pipe(plugin.concat('main.scss'))
         .pipe(plugin.sass())
-        .pipe(plugin.autoprefixer())
+        .pipe(plugin.autoprefixer({browsers: ['last 2 versions']}))
         .pipe(plugin.concat('main.css'))
         .pipe(plugin.minifyCss())   //执行压缩
         .pipe(plugin.rename({suffix: '.min'}))   //rename压缩后的文件名
@@ -116,8 +120,6 @@ gulp.task('html', function () {
     return gulp.src(path)
         .pipe(ngTemplateCache('templates.js',{
             base      : function (f) {
-                console.log('path=='+f.path);
-                console.log('cwd=='+f.cwd);
                 return f.path.replace(f.cwd+'\/app' + '\/', '');
             },
             module    : 'gulp.templates',
@@ -170,60 +172,61 @@ gulp.task('fonts', function () {
 
 
 gulp.task('watchStyle', function () {
-    gulp.watch(paths.css, ['css']);
+    return  gulp.watch(paths.css, ['css'],browserSync.reload);
 });
 
 gulp.task('watchJs', function () {
-    gulp.watch(paths.js, ['js']);
+    return gulp.watch(paths.js, ['js'],browserSync.reload);
 });
 
 gulp.task('watchHtml', function () {
-    gulp.watch(paths.templates, ['html']);
+    return gulp.watch(paths.templates, ['html'],browserSync.reload);
 });
 
 gulp.task('watch', ['watchStyle', 'watchJs','watchHtml']);
-//
-// gulp.task('serve', ['build'], function () {
-//     browserSync({
-//         notify: false,
-//         port: 9000,
-//         server: {
-//             baseDir: ['dist'],
-//             routes: {
-//                 '/bower_components': 'bower_components'
-//             }
-//         }
-//     });
-//
-//     // watch for changes
-//     gulp.watch([
-//         'app/index.html',
-//         'app/views/**/*.html',
-//         'app/styles/**/*.css',
-//         'app/styles/**/*.scss',
-//         'app/scripts/**/*.js',
-//         'app/images/**/*'
-//     ]).on('change', reload);
-// });
-//
-// gulp.task('server',['build','watch'], function() {
-//     gulp.src('./')
-//         .pipe(webserver({
-//             port: 8001,
-//             livereload: true,
-//             directoryListing: true,
-//             open: 'dist/index.html'
-//         }));
-// });
+
+var serverSrc= ['./app/scripts/**/*.js','./app/styles/**/*.css','./app/styles/**/*.scss','./app/views/**/*.html'];
+
+var serverSrcDist= ['./dist/**'];
+
+gulp.task('webserver', function() {
+    return gulp.src('./')
+        .pipe(plugin.webserver({
+            port: 6639,
+            livereload: true,
+            open: true,
+            fallback: 'dist/index.html'
+        }));
+});
+
+gulp.task('browserSync', ['watch'],function () {
+    return browserSync({
+        notify: false,
+        port: 9000,
+        server: {
+            baseDir: ['./'],
+            index: "dist/index.html"
+        },
+        reloadDelay: 500 ,// 延迟刷新
+        files: serverSrcDist
+    });
+
+    // watch for changes
+    // gulp.watch(['watch']);
+});
 
 
+gulp.task('serve', function(cb) {
+    runSequence('build','browserSync',cb);
+});
 
-gulp.task('build', function () {
-    runSequence('clean', 'jshint','html','inject', 'fonts');
+
+gulp.task('build', function (cb) {
+    runSequence('clean', 'jshint','html','inject', 'fonts',cb);
 });
 
 //默认命令,在cmd中输入gulp后,执行的就是这个任务(压缩js需要在检查js之后操作)
-gulp.task('default', ['build']);
+gulp.task('default', ['serve']);
 
 gulp.task('help', function () {
     console.log(plugin);
