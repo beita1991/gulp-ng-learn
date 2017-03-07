@@ -1,4 +1,9 @@
-<div>
-    main-test
+<div class="col-sm-offset-2">
+    =========main=========
+    <div>
+        <button class="btn btn-primary " ng-click="vm.changeLanguage()">中文</button>
+        <button class="btn btn-primary " ng-click="vm.changeLanguage('en_US')">英文</button>
+        <button class="btn btn-primary " ng-click="vm.changeLanguage('zh_TW')">繁体</button>
+    </div>
     <ui-view></ui-view>
 </div>
